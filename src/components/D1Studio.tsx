@@ -8,8 +8,11 @@ import { QueryEditor } from "@/components/QueryEditor";
 import { StatusBar } from "@/components/StatusBar";
 import { TableSidebar } from "@/components/TableSidebar";
 import {
+  buildInsertQuery,
   buildTableQuery,
+  buildUpdateCellQuery,
   extractColumns,
+  fetchTableSchema,
   fetchTables,
   parseQueryResults,
   validateSql,
@@ -24,7 +27,7 @@ import {
   syncConnections,
   updateConnectionLabel,
 } from "@/lib/studio-api";
-import type { AuthUser, SavedConnection } from "@/types/d1";
+import type { AuthUser, SavedConnection, TableColumnInfo } from "@/types/d1";
 
 export function D1Studio() {
   const [hydrated, setHydrated] = useState(false);
@@ -53,6 +56,8 @@ export function D1Studio() {
   const [executionTimeMs, setExecutionTimeMs] = useState<number | null>(null);
   const [rowCount, setRowCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [mutating, setMutating] = useState(false);
+  const [tableSchema, setTableSchema] = useState<TableColumnInfo[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const activeConnection = useMemo(
@@ -62,6 +67,15 @@ export function D1Studio() {
 
   const connected = authenticated && connections.length > 0 && activeConnection !== null;
 
+  const isBrowsingTable =
+    selectedTable !== null && sql.trim() === buildTableQuery(selectedTable).trim();
+
+  const gridColumns = useMemo(() => {
+    if (columns.length > 0) return columns;
+    if (isBrowsingTable) return tableSchema.map((c) => c.name);
+    return [];
+  }, [columns, isBrowsingTable, tableSchema]);
+
   const resetQueryResults = useCallback(() => {
     setSql("-- Select a table or write a query");
     setRows([]);
@@ -69,6 +83,7 @@ export function D1Studio() {
     setExecutionTimeMs(null);
     setRowCount(0);
     setSelectedTable(null);
+    setTableSchema([]);
   }, []);
 
   const refreshConnections = useCallback(async () => {
@@ -257,14 +272,98 @@ export function D1Studio() {
   );
 
   const handleSelectTable = useCallback(
-    (tableName: string) => {
+    async (tableName: string) => {
       if (!activeConnection) return;
       const query = buildTableQuery(tableName);
       setSelectedTable(tableName);
       setSql(query);
+
+      try {
+        const schema = await fetchTableSchema(activeConnection.id, tableName);
+        setTableSchema(schema);
+      } catch (err) {
+        setTableSchema([]);
+        const message = err instanceof Error ? err.message : "Failed to load table schema";
+        setError(message);
+      }
+
       runQuery(activeConnection.id, query);
     },
     [activeConnection, runQuery],
+  );
+
+  const refreshTableData = useCallback(async () => {
+    if (!activeConnection || !selectedTable) return;
+    await runQuery(activeConnection.id, buildTableQuery(selectedTable));
+  }, [activeConnection, runQuery, selectedTable]);
+
+  const handleCellUpdate = useCallback(
+    async (rowIndex: number, column: string, value: unknown) => {
+      if (!activeConnection || !selectedTable || tableSchema.length === 0) return;
+
+      const row = rows[rowIndex];
+      if (!row) return;
+
+      setMutating(true);
+      setError(null);
+
+      try {
+        const query = buildUpdateCellQuery(
+          selectedTable,
+          column,
+          value,
+          row,
+          tableSchema,
+        );
+        const data = await executeQuery(activeConnection.id, query);
+
+        if (!data.success) {
+          const apiError =
+            data.errors?.[0]?.message ?? data.result?.[0]?.error ?? "Update failed";
+          throw new Error(apiError);
+        }
+
+        setRows((prev) =>
+          prev.map((r, i) => (i === rowIndex ? { ...r, [column]: value } : r)),
+        );
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to update cell";
+        setError(message);
+        throw err;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [activeConnection, rows, selectedTable, tableSchema],
+  );
+
+  const handleRowInsert = useCallback(
+    async (values: Record<string, unknown>) => {
+      if (!activeConnection || !selectedTable || tableSchema.length === 0) return;
+
+      setMutating(true);
+      setError(null);
+
+      try {
+        const query = buildInsertQuery(selectedTable, values, tableSchema);
+        const data = await executeQuery(activeConnection.id, query);
+
+        if (!data.success) {
+          const apiError =
+            data.errors?.[0]?.message ?? data.result?.[0]?.error ?? "Insert failed";
+          throw new Error(apiError);
+        }
+
+        await refreshTableData();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to insert row";
+        setError(message);
+        throw err;
+      } finally {
+        setMutating(false);
+      }
+    },
+    [activeConnection, refreshTableData, selectedTable, tableSchema],
   );
 
   const handleExport = useCallback(
@@ -383,7 +482,16 @@ export function D1Studio() {
             rowCount={rowCount}
             loading={loading}
           />
-          <DataGrid columns={columns} rows={rows} loading={loading} />
+          <DataGrid
+            columns={gridColumns}
+            rows={rows}
+            loading={loading}
+            editable={isBrowsingTable && tableSchema.length > 0}
+            schema={tableSchema}
+            mutating={mutating}
+            onCellUpdate={handleCellUpdate}
+            onRowInsert={handleRowInsert}
+          />
         </main>
       </div>
 
