@@ -1,36 +1,25 @@
-export interface D1Config {
-  accountId: string;
-  databaseId: string;
-  apiToken: string;
-}
-
-export type StorageMode = "local" | "session";
-
-/** Public connection record (credentials decrypted in memory only). */
-export interface ConnectionInstance {
-  id: string;
-  label: string;
-  config: D1Config;
-  fingerprint: string;
-  mode: StorageMode;
-  savedAt: string;
-}
-
-/** Persisted connection record (token encrypted). */
-export interface StoredConnectionRecord {
+export interface SavedConnection {
   id: string;
   label: string;
   accountId: string;
   databaseId: string;
-  encryptedToken: string;
-  fingerprint: string;
-  mode: StorageMode;
   savedAt: string;
 }
 
-export interface ConnectionStore {
-  activeId: string | null;
-  connections: StoredConnectionRecord[];
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+}
+
+export interface CfAccountOption {
+  id: string;
+  name: string;
+}
+
+export interface CfDatabaseOption {
+  uuid: string;
+  name: string;
 }
 
 export interface D1QueryMeta {
@@ -58,23 +47,12 @@ export interface D1ApiResponse {
   result: D1QueryResultItem[];
 }
 
-export interface QueryState {
-  rows: Record<string, unknown>[];
-  columns: string[];
-  executionTimeMs: number | null;
-  rowCount: number;
-  error: string | null;
-  loading: boolean;
-}
-
 export interface QueryRequestBody {
-  accountId: string;
-  databaseId: string;
-  apiToken: string;
+  connectionId: string;
   sql: string;
 }
 
-export function defaultConnectionLabel(config: Pick<D1Config, "databaseId">): string {
+export function defaultConnectionLabel(config: Pick<SavedConnection, "databaseId">): string {
   const id = config.databaseId.trim();
   if (id.length <= 12) return id;
   return `${id.slice(0, 8)}…${id.slice(-4)}`;

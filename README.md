@@ -1,6 +1,6 @@
 # D1 Studio
 
-A dark-mode web GUI for querying [Cloudflare D1](https://developers.cloudflare.com/d1/) SQLite databases, inspired by Cloudflare D1 Studio. Built with Next.js, TypeScript, and Tailwind CSS.
+A dark-mode web GUI for querying [Cloudflare D1](https://developers.cloudflare.com/d1/) SQLite databases. Built with Next.js, TypeScript, and Tailwind CSS.
 
 ![Stack](https://img.shields.io/badge/Next.js-16-black)
 ![Stack](https://img.shields.io/badge/TypeScript-5-blue)
@@ -8,12 +8,12 @@ A dark-mode web GUI for querying [Cloudflare D1](https://developers.cloudflare.c
 
 ## Features
 
+- **Sign in with Cloudflare** — OAuth login; saved databases sync across devices
 - **SQL query editor** — Monospace editor with `Ctrl+Enter` / `Cmd+Enter` to execute
-- **Multiple database connections** — Save and switch between different account/database/token combinations
-- **Table browser** — Left sidebar lists tables for the active connection; click to run `SELECT * … LIMIT 100`
+- **Multiple database connections** — Pick D1 databases from your Cloudflare account
+- **Table browser** — Left sidebar lists tables; click to run `SELECT * … LIMIT 100`
 - **Results grid** — Sticky headers, row hover, scrollable output with execution time and row count
 - **Export** — Download results as Excel (`.xlsx`), JSON, or CSV
-- **Encrypted credential storage** — API tokens encrypted in the browser; session or local persistence
 - **Error handling** — Network, auth, and SQL errors shown in the UI
 
 ## Quick start
@@ -22,16 +22,44 @@ A dark-mode web GUI for querying [Cloudflare D1](https://developers.cloudflare.c
 
 - Node.js 20+
 - A Cloudflare account with at least one D1 database
-- An [API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/) with **D1 Read** (or Read/Write) permissions
+- A [Cloudflare OAuth client](https://developers.cloudflare.com/fundamentals/oauth/create-an-oauth-client/) (see setup below)
 
-### Install and run
+### 1. Configure OAuth
+
+Copy the example env file and fill in values:
+
+```bash
+cp .env.example .env.local
+```
+
+| Variable | Description |
+|----------|-------------|
+| `APP_URL` | Public URL of the app, e.g. `http://localhost:3000` |
+| `CLOUDFLARE_OAUTH_CLIENT_ID` | OAuth client ID |
+| `CLOUDFLARE_OAUTH_CLIENT_SECRET` | OAuth client secret |
+| `SESSION_SECRET` | Random string used to encrypt refresh tokens at rest |
+
+Create an OAuth client in **Cloudflare Dashboard → Manage Account → OAuth clients**:
+
+| Setting | Value |
+|---------|--------|
+| Grant types | **Authorization Code** and **Refresh Token** (both required) |
+| Response type | **Code** (not Token) |
+| Redirect URI | `{APP_URL}/api/auth/callback` |
+| Scopes (dashboard) | **Account Settings → Read**, **User Details → Read**, **D1 → Read**, **D1 → Write** |
+| Scopes (auth URL) | `account-settings.read user-details.read d1.read d1.write` — from [GET /oauth/scopes](https://developers.cloudflare.com/api/resources/iam/subresources/oauth_scopes/methods/list/) |
+| Token auth method | `client_secret_post` or `client_secret_basic` |
+
+For use by anyone with a Cloudflare account, set the client visibility to **public** (requires domain verification on your client URL). Private clients only work for members of the OAuth client’s parent account.
+
+### 2. Install and run
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) and click **Sign in with Cloudflare**.
 
 ### Production build
 
@@ -40,29 +68,19 @@ npm run build
 npm start
 ```
 
+Use the same `APP_URL` as your deployed hostname so OAuth redirects work on phone and laptop.
+
 ## Usage
 
-### 1. Add a connection
+### 1. Sign in
 
-On first launch, the connection modal opens automatically. Enter:
+Click **Sign in with Cloudflare** and approve access. Your OAuth session persists for 30 days via an httpOnly cookie.
 
-| Field | Description |
-|-------|-------------|
-| **Label** | Friendly name (e.g. `Production`, `Staging`) |
-| **Account ID** | Your Cloudflare account ID |
-| **Database ID** | D1 database UUID |
-| **API Token** | Bearer token with D1 access |
-| **Storage** | **Session** (tab lifetime) or **Local** (persists across restarts) |
+### 2. Add a database
 
-Click **Add & Connect**. Credentials are validated against the D1 API before being saved.
+Click **Add Database**, choose an account and D1 database, optionally set a label, then **Add & Connect**.
 
-### 2. Manage multiple databases
-
-Use **Add Connection** in the header or the **+** button in the sidebar to add more instances. Each connection can use a different account, database, and token.
-
-- **Click** a database in the sidebar to switch the active connection
-- **Edit** (pencil) to update credentials or label
-- **Delete** (trash) to remove a saved connection
+Saved connections are stored server-side and appear on any device where you sign in with the same Cloudflare account.
 
 ### 3. Run queries
 
@@ -75,55 +93,70 @@ Use **Add Connection** in the header or the **+** button in the sidebar to add m
 ```
 src/
 ├── app/
-│   ├── api/query/route.ts   # Server proxy to Cloudflare D1 API (avoids CORS)
+│   ├── api/
+│   │   ├── auth/           # Cloudflare OAuth login, callback, logout, me
+│   │   ├── connections/    # Saved database picks (per user)
+│   │   ├── d1/             # List accounts & D1 databases
+│   │   └── query/          # Proxy D1 queries using server-side OAuth token
 │   ├── globals.css
 │   ├── layout.tsx
 │   └── page.tsx
 ├── components/
-│   ├── ConnectionModal.tsx  # Add/edit connection popup
-│   ├── D1Studio.tsx         # Main app shell
+│   ├── DatabasePickerModal.tsx
+│   ├── D1Studio.tsx
 │   ├── DataGrid.tsx
 │   ├── ErrorBanner.tsx
 │   ├── ExportDropdown.tsx
 │   ├── QueryEditor.tsx
 │   ├── StatusBar.tsx
-│   └── TableSidebar.tsx     # Databases + tables
+│   └── TableSidebar.tsx
 ├── lib/
-│   ├── connection-storage.ts # Encrypted multi-connection persistence
-│   ├── d1-api.ts             # Client D1 helpers
-│   └── export-data.ts        # Excel / JSON / CSV export
+│   ├── server/             # OAuth, session, encrypted token store
+│   ├── d1-api.ts           # Client query helpers
+│   ├── export-data.ts
+│   └── studio-api.ts       # Client API for auth & connections
 └── types/
     └── d1.ts
 ```
 
+### Auth and storage flow
+
+```mermaid
+sequenceDiagram
+  participant Browser
+  participant App as D1 Studio API
+  participant Store as data/store.json
+  participant CF as Cloudflare OAuth + D1 API
+
+  Browser->>App: Sign in with Cloudflare
+  App->>CF: OAuth authorization code flow
+  CF-->>App: access + refresh tokens
+  App->>Store: encrypted refresh token + saved connections
+  App-->>Browser: session cookie
+
+  Browser->>App: POST /api/query { connectionId, sql }
+  App->>Store: load user + connection
+  App->>CF: D1 query with OAuth access token
+  CF-->>App: query results
+  App-->>Browser: JSON results
+```
+
 ### D1 API integration
 
-The browser calls `/api/query`, which proxies requests to:
+The browser calls `/api/query` with a `connectionId`. The server looks up the account/database IDs, obtains a valid OAuth access token (refreshing if needed), and proxies to:
 
 ```
 POST https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query
 ```
 
-Headers: `Authorization: Bearer {api_token}`, `Content-Type: application/json`  
-Body: `{ "sql": "<query>" }`
-
-The API token is sent from the client on each request and is **not** stored on the server.
-
-### Credential storage
-
-| Data | Storage |
-|------|---------|
-| API token | AES-GCM encrypted |
-| Account ID, Database ID, label | Plain text (for display) |
-| Connection fingerprint | SHA-256 hash |
-
-Session connections live in `sessionStorage`; local connections in `localStorage`. A legacy single-connection format is migrated automatically on load.
+Cloudflare OAuth refresh tokens are encrypted at rest with `SESSION_SECRET`. API tokens are not stored in the browser.
 
 ## Security notes
 
-- This tool is intended for **local or trusted** use. Anyone with access to the running app and browser storage can query your D1 databases.
-- API tokens remain in browser storage (encrypted). Use **Session** storage on shared machines.
-- For production deployments, consider adding authentication in front of the app and restricting network access.
+- OAuth refresh tokens live on the server (encrypted). Protect `SESSION_SECRET` and never commit `.env.local`.
+- User data is stored in `data/store.json` by default — suitable for local/self-hosted use. For production, replace the file store with D1/KV.
+- Sign out revokes the Cloudflare refresh token and clears the local session.
+- Deploy over HTTPS in production so session cookies are secure.
 
 ## Scripts
 

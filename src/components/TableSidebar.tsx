@@ -1,15 +1,15 @@
 "use client";
 
-import type { ConnectionInstance } from "@/types/d1";
+import type { SavedConnection } from "@/types/d1";
 import { truncateId } from "@/types/d1";
 
 interface TableSidebarProps {
-  connections: ConnectionInstance[];
+  connections: SavedConnection[];
+  connectionsLoading: boolean;
   activeConnectionId: string | null;
   onSelectConnection: (id: string) => void;
-  onAddConnection: () => void;
+  onSyncConnections: () => void;
   onEditConnection: (id: string) => void;
-  onRemoveConnection: (id: string) => void;
   tables: string[];
   tablesLoading: boolean;
   selectedTable: string | null;
@@ -19,11 +19,11 @@ interface TableSidebarProps {
 
 export function TableSidebar({
   connections,
+  connectionsLoading,
   activeConnectionId,
   onSelectConnection,
-  onAddConnection,
+  onSyncConnections,
   onEditConnection,
-  onRemoveConnection,
   tables,
   tablesLoading,
   selectedTable,
@@ -40,17 +40,23 @@ export function TableSidebar({
         </h2>
         <button
           type="button"
-          onClick={onAddConnection}
-          aria-label="Add connection"
-          className="rounded p-1 text-[#8b949e] transition-colors hover:bg-[#21262d] hover:text-[#f97316]"
+          onClick={onSyncConnections}
+          disabled={connectionsLoading}
+          aria-label="Refresh databases from Cloudflare"
+          className="rounded p-1 text-[#8b949e] transition-colors hover:bg-[#21262d] hover:text-[#f97316] disabled:opacity-40"
         >
-          <PlusIcon />
+          <RefreshIcon spinning={connectionsLoading} />
         </button>
       </div>
 
       <div className="max-h-48 overflow-y-auto border-b border-[#30363d] py-1">
-        {connections.length === 0 ? (
-          <p className="px-4 py-4 text-xs text-[#484f58]">No connections yet</p>
+        {connectionsLoading && connections.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-6 text-xs text-[#484f58]">
+            <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#30363d] border-t-[#f97316]" />
+            Loading databases…
+          </div>
+        ) : connections.length === 0 ? (
+          <p className="px-4 py-4 text-xs text-[#484f58]">No D1 databases found</p>
         ) : (
           <ul>
             {connections.map((connection) => (
@@ -74,10 +80,10 @@ export function TableSidebar({
                     {connection.label}
                   </span>
                   <span className="truncate font-mono text-[10px] text-[#484f58]">
-                    {truncateId(connection.config.databaseId)}
+                    {truncateId(connection.databaseId)}
                   </span>
                   <span className="truncate font-mono text-[10px] text-[#484f58]">
-                    acct {truncateId(connection.config.accountId, 6, 4)}
+                    acct {truncateId(connection.accountId, 6, 4)}
                   </span>
                 </button>
                 <div className="absolute right-2 top-1/2 flex -translate-y-1/2 gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
@@ -87,21 +93,10 @@ export function TableSidebar({
                       e.stopPropagation();
                       onEditConnection(connection.id);
                     }}
-                    aria-label={`Edit ${connection.label}`}
+                    aria-label={`Rename ${connection.label}`}
                     className="rounded p-1 text-[#8b949e] hover:bg-[#30363d] hover:text-[#c9d1d9]"
                   >
                     <EditIcon />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onRemoveConnection(connection.id);
-                    }}
-                    aria-label={`Remove ${connection.label}`}
-                    className="rounded p-1 text-[#8b949e] hover:bg-red-950/50 hover:text-red-300"
-                  >
-                    <TrashIcon />
                   </button>
                 </div>
               </li>
@@ -167,19 +162,6 @@ export function TableSidebar({
   );
 }
 
-function PlusIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path
-        d="M7 2.5v9M2.5 7h9"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
 function EditIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
@@ -187,20 +169,6 @@ function EditIcon() {
         d="M7.5 2.5 9.5 4.5 4 10H2v-2L7.5 2.5Z"
         stroke="currentColor"
         strokeWidth="1.25"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <path
-        d="M2.5 3.5h7M4.5 3.5V2.5h3v1M3.5 3.5v6h5v-6"
-        stroke="currentColor"
-        strokeWidth="1.25"
-        strokeLinecap="round"
         strokeLinejoin="round"
       />
     </svg>

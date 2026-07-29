@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
+import { executeD1Query as cfExecuteD1Query } from "@/lib/server/cf-api";
+import { requireSessionUserId } from "@/lib/server/session";
+import { getUserById } from "@/lib/server/store";
 import type { D1ApiResponse, QueryRequestBody } from "@/types/d1";
-import { buildD1QueryUrl } from "@/lib/d1-api";
+
+function unauthorized(): NextResponse {
+  return NextResponse.json(
+    {
+      success: false,
+      errors: [{ code: 401, message: "Unauthorized" }],
+      messages: [],
+      result: [],
+    } satisfies D1ApiResponse,
+    { status: 401 },
+  );
+}
 
 export async function POST(request: NextRequest) {
   let body: QueryRequestBody;
@@ -19,13 +33,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { accountId, databaseId, apiToken, sql } = body;
+  const { connectionId, sql } = body;
 
-  if (!accountId?.trim() || !databaseId?.trim() || !apiToken?.trim()) {
+  if (!connectionId?.trim()) {
     return NextResponse.json(
       {
         success: false,
-        errors: [{ code: 400, message: "Account ID, Database ID, and API Token are required" }],
+        errors: [{ code: 400, message: "connectionId is required" }],
         messages: [],
         result: [],
       } satisfies D1ApiResponse,
@@ -45,17 +59,30 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const url = buildD1QueryUrl({ accountId, databaseId });
-
   try {
-    const cfResponse = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiToken.trim()}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ sql: sql.trim() }),
-    });
+    const userId = await requireSessionUserId();
+    const user = await getUserById(userId);
+    if (!user) return unauthorized();
+
+    const connection = user.connections.find((c) => c.id === connectionId.trim());
+    if (!connection) {
+      return NextResponse.json(
+        {
+          success: false,
+          errors: [{ code: 404, message: "Connection not found" }],
+          messages: [],
+          result: [],
+        } satisfies D1ApiResponse,
+        { status: 404 },
+      );
+    }
+
+    const cfResponse = await cfExecuteD1Query(
+      userId,
+      connection.accountId,
+      connection.databaseId,
+      sql,
+    );
 
     const data = (await cfResponse.json()) as D1ApiResponse;
 
@@ -81,14 +108,15 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     const message =
       err instanceof Error ? err.message : "Network error while contacting Cloudflare API";
+    const status = message === "Unauthorized" ? 401 : 503;
     return NextResponse.json(
       {
         success: false,
-        errors: [{ code: 503, message }],
+        errors: [{ code: status, message }],
         messages: [],
         result: [],
       } satisfies D1ApiResponse,
-      { status: 503 },
+      { status },
     );
   }
 }
