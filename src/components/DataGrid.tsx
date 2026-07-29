@@ -215,15 +215,20 @@ export function DataGrid({
       )}
 
       <div className="flex-1 overflow-auto">
-        <table className="w-full min-w-max border-collapse text-sm">
+        <table
+          className="w-full table-fixed border-collapse text-sm"
+          style={{ minWidth: `${Math.max(displayColumns.length * 10, 40)}rem` }}
+        >
           <thead className="sticky top-0 z-10">
             <tr className="bg-[#161b22]">
               {displayColumns.map((col) => (
                 <th
                   key={col}
-                  className="border-b border-r border-[#30363d] px-4 py-2.5 text-left font-mono text-xs font-semibold uppercase tracking-wide text-[#f97316] last:border-r-0"
+                  className="overflow-hidden border-b border-r border-[#30363d] px-4 py-2.5 text-left font-mono text-xs font-semibold uppercase tracking-wide text-[#f97316] last:border-r-0"
                 >
-                  {col}
+                  <span className="block truncate" title={col}>
+                    {col}
+                  </span>
                 </th>
               ))}
             </tr>
@@ -250,17 +255,16 @@ export function DataGrid({
                     const columnInfo = schemaByName.get(col);
                     const isPkAuto = isAutoPk(col);
 
+                    const cellValue = formatCellValue(row[col]);
+
                     return (
                       <td
                         key={col}
-                        className={`max-w-xs border-r border-[#21262d] px-4 py-2 font-mono text-xs last:border-r-0 ${
+                        className={`overflow-hidden border-r border-[#21262d] px-4 py-2 font-mono text-xs last:border-r-0 ${
                           editable && !isPkAuto
-                            ? "cursor-text text-[#c9d1d9] hover:bg-[#21262d]/60"
-                            : "truncate text-[#c9d1d9]"
-                        } ${isPkAuto ? "text-[#484f58]" : ""}`}
-                        title={
-                          isEditing ? undefined : formatCellValue(row[col])
-                        }
+                            ? "cursor-text hover:bg-[#21262d]/60"
+                            : ""
+                        } ${isPkAuto ? "text-[#484f58]" : "text-[#c9d1d9]"}`}
                         onDoubleClick={() => startEdit(rowIndex, col)}
                       >
                         {isEditing ? (
@@ -285,7 +289,9 @@ export function DataGrid({
                             className="w-full min-w-[8rem] rounded border border-[#f97316]/50 bg-[#0f1117] px-2 py-1 text-xs text-[#e6edf3] outline-none focus:border-[#f97316]"
                           />
                         ) : (
-                          formatCellValue(row[col])
+                          <span className="block truncate" title={cellValue}>
+                            {cellValue}
+                          </span>
                         )}
                       </td>
                     );
