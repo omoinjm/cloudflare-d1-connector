@@ -70,6 +70,22 @@ npm start
 
 Use the same `APP_URL` as your deployed hostname so OAuth redirects work on phone and laptop.
 
+### Deploy on Vercel
+
+Vercel serverless functions have a read-only filesystem, so the default `data/store.json` file store does not work in production. Use **Cloudflare Workers KV** instead:
+
+1. In Cloudflare Dashboard: **Workers & Pages → KV → Create namespace** (e.g. `d1-studio`)
+2. Copy the namespace ID
+3. Create an API token with **Workers KV Storage Read** and **Workers KV Storage Write** on that namespace
+4. In Vercel, set:
+   - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
+   - `CLOUDFLARE_KV_NAMESPACE_ID` — the KV namespace ID
+   - `CLOUDFLARE_API_TOKEN` — the token from step 3
+   - Plus `APP_URL`, OAuth credentials, and `SESSION_SECRET`
+5. Redeploy
+
+Local development continues to use `data/store.json` when KV env vars are not set.
+
 ## Usage
 
 ### 1. Sign in
@@ -154,7 +170,7 @@ Cloudflare OAuth refresh tokens are encrypted at rest with `SESSION_SECRET`. API
 ## Security notes
 
 - OAuth refresh tokens live on the server (encrypted). Protect `SESSION_SECRET` and never commit `.env.local`.
-- User data is stored in `data/store.json` by default — suitable for local/self-hosted use. For production, replace the file store with D1/KV.
+- User data is stored in `data/store.json` locally. On Vercel, configure Cloudflare KV (see **Deploy on Vercel** above).
 - Sign out revokes the Cloudflare refresh token and clears the local session.
 - Deploy over HTTPS in production so session cookies are secure.
 
