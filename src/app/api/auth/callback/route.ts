@@ -5,8 +5,18 @@ import {
 } from "@/lib/server/cloudflare-oauth";
 import { saveUserTokens } from "@/lib/server/cf-api";
 import { getAppUrl } from "@/lib/server/env";
+import {
+  isKvAuthError,
+  KV_AUTH_ERROR_MESSAGE,
+} from "@/lib/server/kv-store";
 import { consumeOAuthState, startSession } from "@/lib/server/session";
 import { getUserById, upsertUser } from "@/lib/server/store";
+
+function authErrorRedirect(message: string) {
+  return NextResponse.redirect(
+    `${getAppUrl()}/?auth_error=${encodeURIComponent(message)}`,
+  );
+}
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -15,18 +25,16 @@ export async function GET(request: NextRequest) {
   const oauthError = url.searchParams.get("error");
 
   if (oauthError) {
-    return NextResponse.redirect(
-      `${getAppUrl()}/?auth_error=${encodeURIComponent(oauthError)}`,
-    );
+    return authErrorRedirect(oauthError);
   }
 
   if (!code || !state) {
-    return NextResponse.redirect(`${getAppUrl()}/?auth_error=missing_code`);
+    return authErrorRedirect("missing_code");
   }
 
   const validState = await consumeOAuthState(state);
   if (!validState) {
-    return NextResponse.redirect(`${getAppUrl()}/?auth_error=invalid_state`);
+    return authErrorRedirect("invalid_state");
   }
 
   try {
@@ -49,9 +57,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(getAppUrl());
   } catch (err) {
+    if (isKvAuthError(err)) {
+      return authErrorRedirect(KV_AUTH_ERROR_MESSAGE);
+    }
     const message = err instanceof Error ? err.message : "OAuth callback failed";
-    return NextResponse.redirect(
-      `${getAppUrl()}/?auth_error=${encodeURIComponent(message)}`,
-    );
+    return authErrorRedirect(message);
   }
 }
