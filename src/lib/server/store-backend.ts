@@ -50,6 +50,14 @@ function parseStore(raw: unknown): AppStore {
   };
 }
 
+function useKvStorage(): boolean {
+  if (!getKvConfig()) return false;
+  // Vercel has a read-only filesystem; KV is required in production.
+  if (process.env.VERCEL) return true;
+  // Opt in locally when you want to exercise KV against real credentials.
+  return process.env.USE_KV_STORAGE === "1";
+}
+
 function requireVercelStorage(): void {
   if (process.env.VERCEL && !getKvConfig()) {
     throw new Error(
@@ -92,7 +100,7 @@ let backend: StoreBackend | null = null;
 
 function getStoreBackend(): StoreBackend {
   if (!backend) {
-    if (getKvConfig()) {
+    if (useKvStorage()) {
       backend = createKvBackend();
     } else {
       requireVercelStorage();

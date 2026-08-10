@@ -84,7 +84,7 @@ Vercel serverless functions have a read-only filesystem, so the default `data/st
    - Plus `APP_URL`, OAuth credentials, and `SESSION_SECRET`
 5. Redeploy
 
-Local development continues to use `data/store.json` when KV env vars are not set.
+Local development uses `data/store.json` by default. KV env vars in `.env` are ignored locally unless you set `USE_KV_STORAGE=1` to test against the real namespace.
 
 ## Usage
 
