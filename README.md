@@ -86,6 +86,8 @@ Vercel serverless functions have a read-only filesystem, so the default `data/st
 
 Local development uses `data/store.json` by default. KV env vars in `.env` are ignored locally unless you set `USE_KV_STORAGE=1` to test against the real namespace.
 
+**Troubleshooting login on Vercel:** If sign-in fails with a KV authentication / `401` / Cloudflare code `10000` error, OAuth usually succeeded but the app could not read Workers KV. `CLOUDFLARE_API_TOKEN` must be a Cloudflare **API token** with Workers KV Read + Write — not `CLOUDFLARE_OAUTH_CLIENT_SECRET`. Confirm the token’s account matches `CLOUDFLARE_ACCOUNT_ID` and the namespace matches `CLOUDFLARE_KV_NAMESPACE_ID`, then redeploy. Hit `/api/auth/debug` to check KV readiness (`kv.status`: `ok` | `unauthorized` | `unconfigured`) without exposing secrets.
+
 ## Usage
 
 ### 1. Sign in
