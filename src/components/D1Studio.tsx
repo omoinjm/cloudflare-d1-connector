@@ -15,6 +15,7 @@ import {
   fetchTableSchema,
   fetchTables,
   parseQueryResults,
+  tableHasRowid,
   validateSql,
 } from "@/lib/d1-api";
 import { exportData, type ExportFormat } from "@/lib/export-data";
@@ -49,6 +50,7 @@ export function D1Studio() {
   const [tables, setTables] = useState<string[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const [selectedTableHasRowid, setSelectedTableHasRowid] = useState(true);
 
   const [sql, setSql] = useState("-- Select a table or write a query");
   const [columns, setColumns] = useState<string[]>([]);
@@ -68,7 +70,8 @@ export function D1Studio() {
   const connected = authenticated && connections.length > 0 && activeConnection !== null;
 
   const isBrowsingTable =
-    selectedTable !== null && sql.trim() === buildTableQuery(selectedTable).trim();
+    selectedTable !== null &&
+    sql.trim() === buildTableQuery(selectedTable, selectedTableHasRowid).trim();
 
   const gridColumns = useMemo(() => {
     if (columns.length > 0) return columns;
@@ -274,8 +277,17 @@ export function D1Studio() {
   const handleSelectTable = useCallback(
     async (tableName: string) => {
       if (!activeConnection) return;
-      const query = buildTableQuery(tableName);
       setSelectedTable(tableName);
+
+      let hasRowid = true;
+      try {
+        hasRowid = await tableHasRowid(activeConnection.id, tableName);
+      } catch {
+        hasRowid = true;
+      }
+      setSelectedTableHasRowid(hasRowid);
+
+      const query = buildTableQuery(tableName, hasRowid);
       setSql(query);
 
       try {
@@ -294,8 +306,8 @@ export function D1Studio() {
 
   const refreshTableData = useCallback(async () => {
     if (!activeConnection || !selectedTable) return;
-    await runQuery(activeConnection.id, buildTableQuery(selectedTable));
-  }, [activeConnection, runQuery, selectedTable]);
+    await runQuery(activeConnection.id, buildTableQuery(selectedTable, selectedTableHasRowid));
+  }, [activeConnection, runQuery, selectedTable, selectedTableHasRowid]);
 
   const handleCellUpdate = useCallback(
     async (rowIndex: number, column: string, value: unknown) => {

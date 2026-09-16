@@ -60,6 +60,20 @@ function escapeSqlString(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+export async function tableHasRowid(
+  connectionId: string,
+  tableName: string,
+): Promise<boolean> {
+  const sql = `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ${escapeSqlString(tableName)};`;
+  const data = await executeQuery(connectionId, sql);
+
+  if (!data.success) return true;
+
+  const { rows } = parseQueryResults(data);
+  const createSql = String(rows[0]?.sql ?? "");
+  return !/without\s+rowid/i.test(createSql);
+}
+
 export function formatSqlValue(value: unknown, column?: TableColumnInfo): string {
   if (value === null || value === undefined) return "NULL";
 
@@ -137,8 +151,11 @@ function buildWhereClause(
   return `rowid = ${formatSqlValue(row[ROWID_COLUMN])}`;
 }
 
-export function buildTableQuery(tableName: string): string {
+export function buildTableQuery(tableName: string, hasRowid = true): string {
   const escaped = tableName.replace(/"/g, '""');
+  if (!hasRowid) {
+    return `SELECT * FROM "${escaped}" LIMIT 100;`;
+  }
   return `SELECT *, rowid AS ${ROWID_COLUMN} FROM "${escaped}" LIMIT 100;`;
 }
 
