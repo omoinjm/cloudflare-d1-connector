@@ -1,53 +1,12 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import path from "node:path";
-import type { SavedConnection } from "@/types/d1";
+import {
+  readStore,
+  writeStore,
+  type OAuthTokens,
+  type StoredSession,
+  type StoredUser,
+} from "@/lib/server/store-backend";
 
-export interface OAuthTokens {
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: number;
-  scope: string;
-  tokenType: string;
-}
-
-export interface StoredUser {
-  id: string;
-  email: string;
-  name: string;
-  encryptedTokens: string;
-  connections: SavedConnection[];
-  activeConnectionId: string | null;
-}
-
-export interface StoredSession {
-  userId: string;
-  expiresAt: number;
-}
-
-interface AppStore {
-  users: Record<string, StoredUser>;
-  sessions: Record<string, StoredSession>;
-}
-
-const STORE_PATH = path.join(process.cwd(), "data", "store.json");
-
-async function readStore(): Promise<AppStore> {
-  try {
-    const raw = await readFile(STORE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as AppStore;
-    return {
-      users: parsed.users ?? {},
-      sessions: parsed.sessions ?? {},
-    };
-  } catch {
-    return { users: {}, sessions: {} };
-  }
-}
-
-async function writeStore(store: AppStore): Promise<void> {
-  await mkdir(path.dirname(STORE_PATH), { recursive: true });
-  await writeFile(STORE_PATH, JSON.stringify(store, null, 2), "utf8");
-}
+export type { OAuthTokens, StoredSession, StoredUser };
 
 export async function getUserById(userId: string): Promise<StoredUser | null> {
   const store = await readStore();
@@ -100,7 +59,7 @@ export async function deleteSession(sessionId: string): Promise<void> {
 
 export async function updateUserConnections(
   userId: string,
-  connections: SavedConnection[],
+  connections: StoredUser["connections"],
   activeConnectionId: string | null,
 ): Promise<void> {
   const store = await readStore();

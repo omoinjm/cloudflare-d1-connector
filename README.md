@@ -70,6 +70,24 @@ npm start
 
 Use the same `APP_URL` as your deployed hostname so OAuth redirects work on phone and laptop.
 
+### Deploy on Vercel
+
+Vercel serverless functions have a read-only filesystem, so the default `data/store.json` file store does not work in production. Use **Cloudflare Workers KV** instead:
+
+1. In Cloudflare Dashboard: **Workers & Pages → KV → Create namespace** (e.g. `d1-studio`)
+2. Copy the namespace ID
+3. Create an API token with **Workers KV Storage Read** and **Workers KV Storage Write** on that namespace
+4. In Vercel, set:
+   - `CLOUDFLARE_ACCOUNT_ID` — your Cloudflare account ID
+   - `CLOUDFLARE_KV_NAMESPACE_ID` — the KV namespace ID
+   - `CLOUDFLARE_API_TOKEN` — the token from step 3
+   - Plus `APP_URL`, OAuth credentials, and `SESSION_SECRET`
+5. Redeploy
+
+Local development uses `data/store.json` by default. KV env vars in `.env` are ignored locally unless you set `USE_KV_STORAGE=1` to test against the real namespace.
+
+**Troubleshooting login on Vercel:** If sign-in fails with a KV authentication / `401` / Cloudflare code `10000` error, OAuth usually succeeded but the app could not read Workers KV. `CLOUDFLARE_API_TOKEN` must be a Cloudflare **API token** with Workers KV Read + Write — not `CLOUDFLARE_OAUTH_CLIENT_SECRET`. Confirm the token’s account matches `CLOUDFLARE_ACCOUNT_ID` and the namespace matches `CLOUDFLARE_KV_NAMESPACE_ID`, then redeploy. Hit `/api/auth/debug` to check KV readiness (`kv.status`: `ok` | `unauthorized` | `unconfigured`) without exposing secrets.
+
 ## Usage
 
 ### 1. Sign in
@@ -154,7 +172,7 @@ Cloudflare OAuth refresh tokens are encrypted at rest with `SESSION_SECRET`. API
 ## Security notes
 
 - OAuth refresh tokens live on the server (encrypted). Protect `SESSION_SECRET` and never commit `.env.local`.
-- User data is stored in `data/store.json` by default — suitable for local/self-hosted use. For production, replace the file store with D1/KV.
+- User data is stored in `data/store.json` locally. On Vercel, configure Cloudflare KV (see **Deploy on Vercel** above).
 - Sign out revokes the Cloudflare refresh token and clears the local session.
 - Deploy over HTTPS in production so session cookies are secure.
 

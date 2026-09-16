@@ -62,3 +62,13 @@ export function truncateId(id: string, head = 8, tail = 4): string {
   if (id.length <= head + tail + 1) return id;
   return `${id.slice(0, head)}…${id.slice(-tail)}`;
 }
+
+export interface TableColumnInfo {
+  name: string;
+  type: string;
+  notNull: boolean;
+  defaultValue: unknown;
+  primaryKey: number;
+}
+
+export const ROWID_COLUMN = "__d1_rowid__";
